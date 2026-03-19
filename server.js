@@ -5,7 +5,7 @@ const qs = require("querystring");
 const app = express();
 app.use(express.json());
 
-const APP_NAME = "Cruuzuid";
+const APP_NAME = "SxntiBypass";
 const OWNER_ID = "y5tsaoFToV";
 const VERSION = "1.0";
 
