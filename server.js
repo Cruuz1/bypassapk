@@ -1,54 +1,89 @@
 const express = require("express");
 const axios = require("axios");
+const qs = require("querystring");
 
 const app = express();
 app.use(express.json());
 
-const appname = "Cruuzuid";
-const ownerid = "y5tsaoFToV";
-const version = "1.0";
+const APP_NAME = "Cruuzuid";
+const OWNER_ID = "y5tsaoFToV";
+const VERSION = "1.0";
 
-app.post("/api/login-key", async (req, res) => {
-    const key = req.body.licenseKey;
-
-    try {
-        // 🔹 1. INIT
-        const init = await axios.post("https://keyauth.win/api/1.2/", {
-            type: "init",
-            name: appname,
-            ownerid: ownerid,
-            version: version
-        });
-
-        if (!init.data.success) {
-            return res.json({ success: false });
-        }
-
-        const sessionid = init.data.sessionid;
-
-        // 🔹 2. LOGIN CON LICENSE
-        const login = await axios.post("https://keyauth.win/api/1.2/", {
-            type: "license",
-            key: key,
-            name: appname,
-            ownerid: ownerid,
-            sessionid: sessionid
-        });
-
-        if (login.data.success) {
-            res.json({ success: true });
-        } else {
-            res.json({ success: false });
-        }
-
-    } catch (e) {
-        console.log(e.message);
-        res.json({ success: false });
-    }
+app.get("/", (_req, res) => {
+  res.send("Backend funcionando");
 });
 
-app.get("/", (req, res) => {
-    res.send("Backend funcionando");
+app.post("/api/login-key", async (req, res) => {
+  const key = (req.body.licenseKey || "").trim();
+
+  if (!key) {
+    return res.json({ success: false, stage: "input", message: "missing key" });
+  }
+
+  try {
+    // INIT: siguiendo el estilo de payload de los ejemplos oficiales
+    const initBody = qs.stringify({
+      type: "init",
+      name: APP_NAME,
+      ownerid: OWNER_ID,
+      ver: VERSION,
+      hash: "backend"
+    });
+
+    const initResp = await axios.post(
+      "https://keyauth.win/api/1.2/",
+      initBody,
+      {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 15000
+      }
+    );
+
+    console.log("INIT RESPONSE:", initResp.data);
+
+    if (!initResp.data || !initResp.data.success || !initResp.data.sessionid) {
+      return res.json({
+        success: false,
+        stage: "init",
+        response: initResp.data || null
+      });
+    }
+
+    const sessionid = initResp.data.sessionid;
+
+    // LICENSE
+    const licenseBody = qs.stringify({
+      type: "license",
+      key: key,
+      sessionid: sessionid,
+      name: APP_NAME,
+      ownerid: OWNER_ID
+    });
+
+    const licenseResp = await axios.post(
+      "https://keyauth.win/api/1.2/",
+      licenseBody,
+      {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 15000
+      }
+    );
+
+    console.log("LICENSE RESPONSE:", licenseResp.data);
+
+    return res.json({
+      success: !!licenseResp.data?.success,
+      stage: "license",
+      response: licenseResp.data || null
+    });
+  } catch (e) {
+    console.log("BACKEND ERROR:", e.response?.data || e.message);
+    return res.json({
+      success: false,
+      stage: "exception",
+      message: e.response?.data || e.message
+    });
+  }
 });
 
 app.listen(3000, () => console.log("Server running"));
